@@ -29,8 +29,8 @@
 #define BLE_DEVICE_NAME "AECBC"        // デバイス名(サービス名)
 #define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 4294967295
 
-const int scanning_sec = 3;  // スキャン時間[sec]
-const int delay_sec = 2;  // ループごとの休止時間[sec]
+const int scanning_sec = 2;  // スキャン時間[sec]
+const int delay_msec = 1000;  // ループごとの休止時間[msec]
 
 BLEScan *pScan;
 
@@ -120,14 +120,13 @@ void loop() {
   pin_in_1 = digitalRead(PIN_IN_1);
   pin_in_2 = digitalRead(PIN_IN_2);
   pin_in_3 = digitalRead(PIN_IN_3);
-  Serial.print("PIN1:");
+  Serial.print("PIN_IN(1,2,3):(");
   Serial.print(pin_in_1);
-  Serial.print("   PIN2:");
   Serial.print(pin_in_2);
-  Serial.print("   PIN3:");
-  Serial.println(pin_in_3);
-
-  // ピン出力
+  Serial.print(pin_in_3);
+  Serial.println(")");
+  
+  // ピン出力  スキャン結果を出力する
   if (pin_info_1 == 0)
   {
     digitalWrite(PIN_OUT_1, LOW);
@@ -154,5 +153,5 @@ void loop() {
   }
 
   // wait
-  delay(delay_sec * 1000);
+  delay(delay_msec);
 }

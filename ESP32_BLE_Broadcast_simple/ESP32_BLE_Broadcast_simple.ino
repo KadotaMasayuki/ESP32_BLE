@@ -32,8 +32,8 @@
 
 uint8_t seq_number;  // シーケンス番号。ディープスリープ運用するときは、メモリクリアされちゃうかも。  'RTC_DATA_ATTR static uint8_t seq_number' と宣言したほうが良いかも?
 
-const int advertising_sec = 1;  // アドバタイジング時間[sec]
-const int delay_sec = 2;  // ループごとの休止時間[sec]
+const int advertising_msec = 1000;  // アドバタイジング時間[msec]
+const int delay_msec = 1000;  // ループごとの休止時間[msec]
 
 BLEServer *pBLEServer;
 BLEAdvertising *pBLEAdvertising;
@@ -75,14 +75,13 @@ void loop() {
   pin_in_1 = digitalRead(PIN_IN_1);
   pin_in_2 = digitalRead(PIN_IN_2);
   pin_in_3 = digitalRead(PIN_IN_3);
-  Serial.print("PIN1:");
+  Serial.print("PIN_IN(1,2,3):(");
   Serial.print(pin_in_1);
-  Serial.print("   PIN2:");
   Serial.print(pin_in_2);
-  Serial.print("   PIN3:");
-  Serial.println(pin_in_3);
+  Serial.print(pin_in_3);
+  Serial.println(")");
   
-  // ピン出力
+  // ピン出力  ピン入力をそのまま出力する
   if (pin_in_1 == 0)
   {
     digitalWrite(PIN_OUT_1, LOW);
@@ -113,14 +112,14 @@ void loop() {
   // アドバタイズ開始
   pBLEAdvertising->start();
   Serial.println("Advertising started! " + (int)seq_number);
-  delay(advertising_sec * 1000);
+  delay(advertising_msec);
   // アドバタイズ停止
   pBLEAdvertising->stop();
   Serial.println("Advertising stoped! " + (int)seq_number);
 
   seq_number ++;
   // wait
-  delay(delay_sec * 1000);
+  delay(delay_msec);
 }
 
 void setAdvertisingData(BLEAdvertising* pBLEAdvertising, int pin_in_1, int pin_in_2, int pin_in_3) {
@@ -143,6 +142,6 @@ void setAdvertisingData(BLEAdvertising* pBLEAdvertising, int pin_in_1, int pin_i
   oAdvertisementData.setName(BLE_DEVICE_NAME);
   oAdvertisementData.setFlags(0x06);      // LE General Discoverable Mode | BR_EDR_NOT_SUPPORTED
   oAdvertisementData.setManufacturerData(strData);
-  Serial.println(oAdvertisementData.getPayload().c_str());
+  Serial.println(oAdvertisementData.getPayload(, HEX);
   pBLEAdvertising->setAdvertisementData(oAdvertisementData);
 }
