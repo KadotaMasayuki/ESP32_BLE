@@ -11,7 +11,7 @@
 
 
 /* 基本属性定義  */
-#define BLE_DEVICE_NAME "KADOTA"        // デバイス名
+#define BLE_DEVICE_NAME "NAME"        // デバイス名
 #define BLE_DEVICE_NUMBER 1             // デバイス識別番号（1～8）
 
 uint8_t seq_number;  // シーケンス番号。ディープスリープ運用するときは、メモリクリアされちゃうかも。  'RTC_DATA_ATTR static uint8_t seq_number' と宣言したほうが良いかも?
