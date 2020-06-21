@@ -7,7 +7,7 @@
 
 
 /* 基本属性定義  */
-#define BLE_DEVICE_NAME "OPPO AX7"         // デバイス名
+#define BLE_DEVICE_NAME "NAME"         // デバイス名
 #define BLE_DEVICE_NUMBER 1             // デバイス識別番号（1～8）
 
 const int scanning_sec = 5;  // スキャン時間[sec]
