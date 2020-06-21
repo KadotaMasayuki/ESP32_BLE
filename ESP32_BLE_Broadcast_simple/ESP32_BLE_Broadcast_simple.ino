@@ -11,20 +11,20 @@
 
 
 // 入出力ピン情報
-// IN1 (PIN8, IO32)
-// IN2 (PIN9, IO33)
-// IN3 (PIN10, IO25)
-// OUT1 (PIN28, IO17)
-// OUT2 (PIN30, IO18)
-// OUT3 (PIN31, IO19)
+// IN1 (GPI36)
+// IN2 (GPI39)
+// IN3 (GPI34)
+// OUT1 (GPIO25)
+// OUT2 (GPIO26)
+// OUT3 (GPIO27)
 //
 
-#define PIN_IN_1  32
-#define PIN_IN_2  32
-#define PIN_IN_3  25
-#define PIN_OUT_1 17
-#define PIN_OUT_2 18
-#define PIN_OUT_3 19
+#define PIN_IN_1  36
+#define PIN_IN_2  39
+#define PIN_IN_3  34
+#define PIN_OUT_1 25
+#define PIN_OUT_2 26
+#define PIN_OUT_3 27
 
 /* 基本属性定義  */
 #define BLE_DEVICE_NAME "AECBC"        // デバイス名(サービス名)
