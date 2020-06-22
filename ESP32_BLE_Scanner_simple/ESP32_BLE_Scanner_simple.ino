@@ -1,11 +1,15 @@
-// 2020/06/03,12
+// 2020/06/03,12,22
 //
 // 参考
 // http://marchan.e5.valueserver.jp/cabin/comp/jbox/arc212/doc21203.html
 
+//
+// Environment...
+//   Arduino 1.8.13
+//   ESP32 1.0.4
+//
 
 #include <BLEDevice.h>
-
 
 
 // 入出力ピン情報
@@ -27,9 +31,9 @@
 
 /* 基本属性定義  */
 #define BLE_DEVICE_NAME "AECBC"        // デバイス名(サービス名)
-#define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 4294967295
+#define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 65535
 
-const int scanning_sec = 2;  // スキャン時間[sec]
+const int scanning_sec = 2;   // スキャン時間[sec]
 const int delay_msec = 1000;  // ループごとの休止時間[msec]
 
 BLEScan *pScan;
@@ -60,7 +64,7 @@ void setup() {
 
 void loop() {
   int manu_code = 0;
-  unsigned int device_number = 0;
+  uint16_t device_number = 0;
   int seq_number = 0;
   int pin_info_1 = 0;
   int pin_info_2 = 0;
@@ -68,13 +72,14 @@ void loop() {
   int rssi = 0;
   
   delay(100);
+  Serial.println();
 
   // スキャン開始
   Serial.println("Scanning!");
   BLEScanResults foundDevices = pScan->start(scanning_sec);
   int foundCount = foundDevices.getCount();
 
-  // 見つかったデバイス郡から、指定のデバイス(BLE_DEVICE_NAMEのもの)を処理
+  // 見つかったデバイス群から、指定のデバイス(BLE_DEVICE_NAMEのもの)を処理
   for (int i = 0; i < foundCount; i ++) {
     BLEAdvertisedDevice dev = foundDevices.getDevice(i);
     std::string device_name = dev.getName();
@@ -82,32 +87,34 @@ void loop() {
       if (dev.haveManufacturerData()) {
         std::string data = dev.getManufacturerData();
         manu_code = data[1] << 8 | data[0];
-        device_number = data[5] << 24 | data[4] << 16 | data[3] << 8 | data[2];
-        seq_number = data[6];
-        pin_info_1 = data[7];
-        pin_info_2 = data[8];
-        pin_info_3 = data[9];
+        device_number = (((uint16_t)data[3]) << 8) | (uint16_t)data[2];
+        seq_number = data[4];
+        pin_info_1 = data[5];
+        pin_info_2 = data[6];
+        pin_info_3 = data[7];
         rssi = dev.getRSSI();
 
         Serial.print("Device Number:");
         Serial.print(device_number);
 
-        Serial.print("   INFO1:");
+        Serial.print("   SN:");
+        Serial.print(seq_number);
+
+        Serial.print("   INFO(1,2,3):(");
         Serial.print(pin_info_1);
-        
-        Serial.print("   INFO2:");
         Serial.print(pin_info_2);
-        
-        Serial.print("   INFO3:");
         Serial.print(pin_info_3);
+        Serial.print(")");
         
         Serial.print("   RSSI:");
         Serial.print(rssi);
-        Serial.println("dBm");
+        Serial.println("[dBm]");
 
         Serial.print("RAW:");
-        Serial.println(data.c_str());
-
+        for (int i = 0; i < data.length(); i ++) {
+          Serial.print((char)data[i], HEX);
+          Serial.print(" ");
+        }
         Serial.println();
       }
     }
@@ -127,31 +134,25 @@ void loop() {
   Serial.println(")");
   
   // ピン出力  スキャン結果を出力する
-  if (pin_info_1 == 0)
-  {
+  if (pin_info_1 == 0) {
     digitalWrite(PIN_OUT_1, LOW);
-  }
-  else
-  {
+  } else {
     digitalWrite(PIN_OUT_1, HIGH);
   }
-  if (pin_info_2 == 0)
-  {
+  if (pin_info_2 == 0) {
     digitalWrite(PIN_OUT_2, LOW);
-  }
-  else
-  {
+  } else {
     digitalWrite(PIN_OUT_2, HIGH);
   }
-  if (pin_info_3 == 0)
-  {
+  if (pin_info_3 == 0) {
     digitalWrite(PIN_OUT_3, LOW);
-  }
-  else
-  {
+  } else {
     digitalWrite(PIN_OUT_3, HIGH);
   }
 
   // wait
+  Serial.print("Waiting ");
+  Serial.print(delay_msec);
+  Serial.println("[ms]");
   delay(delay_msec);
 }

@@ -1,13 +1,16 @@
-// 2020/06/03,12
+// 2020/06/03,12,22
 //
 // 参考
 // http://marchan.e5.valueserver.jp/cabin/comp/jbox/arc212/doc21202.html
 
+//
+// Environment...
+//   Arduino 1.8.13
+//   ESP32 1.0.4
+//
+
 #include <BLEDevice.h>
 #include <BLEServer.h>
-//#include <BLEUtils.h>
-//#include <BLEScan.h>
-//#include <BLEAdvertisedDevice.h>
 
 
 // 入出力ピン情報
@@ -28,7 +31,7 @@
 
 /* 基本属性定義  */
 #define BLE_DEVICE_NAME "AECBC"        // デバイス名(サービス名)
-#define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 4294967295
+#define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 65535
 
 uint8_t seq_number;  // シーケンス番号。ディープスリープ運用するときは、メモリクリアされちゃうかも。  'RTC_DATA_ATTR static uint8_t seq_number' と宣言したほうが良いかも?
 
@@ -67,6 +70,7 @@ void setup() {
 
 void loop() {
   delay(100);
+  Serial.println();
 
   // ピン入力
   int pin_in_1;
@@ -82,28 +86,19 @@ void loop() {
   Serial.println(")");
   
   // ピン出力  ピン入力をそのまま出力する
-  if (pin_in_1 == 0)
-  {
+  if (pin_in_1 == 0) {
     digitalWrite(PIN_OUT_1, LOW);
-  }
-  else
-  {
+  } else {
     digitalWrite(PIN_OUT_1, HIGH);
   }
-  if (pin_in_2 == 0)
-  {
+  if (pin_in_2 == 0) {
     digitalWrite(PIN_OUT_2, LOW);
-  }
-  else
-  {
+  } else {
     digitalWrite(PIN_OUT_2, HIGH);
   }
-  if (pin_in_3 == 0)
-  {
+  if (pin_in_3 == 0) {
     digitalWrite(PIN_OUT_3, LOW);
-  }
-  else
-  {
+  } else {
     digitalWrite(PIN_OUT_3, HIGH);
   }
 
@@ -111,14 +106,20 @@ void loop() {
   setAdvertisingData(pBLEAdvertising, pin_in_1, pin_in_2, pin_in_3);
   // アドバタイズ開始
   pBLEAdvertising->start();
-  Serial.println("Advertising started! " + (int)seq_number);
+  Serial.print("Advertising ");
+  Serial.print(advertising_msec);
+  Serial.print("[ms] ");
   delay(advertising_msec);
   // アドバタイズ停止
   pBLEAdvertising->stop();
-  Serial.println("Advertising stoped! " + (int)seq_number);
+  Serial.print(" ... stoped! ");
+  Serial.println((int)seq_number);
 
   seq_number ++;
   // wait
+  Serial.print("Waiting ");
+  Serial.print(delay_msec);
+  Serial.println("[ms]");
   delay(delay_msec);
 }
 
@@ -126,13 +127,11 @@ void setAdvertisingData(BLEAdvertising* pBLEAdvertising, int pin_in_1, int pin_i
   unsigned long num = (unsigned long)BLE_DEVICE_NUMBER;
   
   std::string strData = "";
-  strData += (char)0xff;                  // manufacturer ID low byte
-  strData += (char)0xff;                  // manufacturer ID high byte
-  strData += (char)(num & 0xff);          // サーバー識別番号 最下位バイト
-  strData += (char)((num >> 8) & 0xff);   // サーバー識別番号
-  strData += (char)((num >> 16) & 0xff);  // サーバー識別番号
-  strData += (char)((num >> 24) & 0xff);  // サーバー識別番号 最上位バイト
-  strData += (char)seq_number;            // シーケンス番号
+  strData += (char)0xff;                            // manufacturer ID low byte
+  strData += (char)0xff;                            // manufacturer ID high byte
+  strData += (char)((uint16_t)num & 0xff);           // サーバー識別番号 最下位バイト
+  strData += (char)((((uint16_t)num) >> 8) & 0xff);  // サーバー識別番号 最上位バイト
+  strData += (char)seq_number;                      // シーケンス番号
   strData += (char)pin_in_1;
   strData += (char)pin_in_2;
   strData += (char)pin_in_3;
@@ -142,6 +141,11 @@ void setAdvertisingData(BLEAdvertising* pBLEAdvertising, int pin_in_1, int pin_i
   oAdvertisementData.setName(BLE_DEVICE_NAME);
   oAdvertisementData.setFlags(0x06);      // LE General Discoverable Mode | BR_EDR_NOT_SUPPORTED
   oAdvertisementData.setManufacturerData(strData);
-  Serial.println(oAdvertisementData.getPayload(, HEX);
+  std::string payload = oAdvertisementData.getPayload();
+  for (int i = 0; i < payload.length(); i ++) {
+    Serial.print((char)payload[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
   pBLEAdvertising->setAdvertisementData(oAdvertisementData);
 }
