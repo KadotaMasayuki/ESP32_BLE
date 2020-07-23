@@ -1,4 +1,4 @@
-// 2020/07/06
+// 2020/07/06,2020/07/22
 //  BLEのアドバタイズで3軸加速度センサ(ADXL345)の値を飛ばす
 //  DeepSleepを使って省電力
 //
@@ -33,8 +33,8 @@
 #define PIN_OUT_3 27
 
 
-// ディープスリープ時間
-#define MS_TO_SLEEP 550
+// スリープ時間
+#define MS_TO_SLEEP 350
 
 
 // シーケンス番号
@@ -44,7 +44,7 @@ RTC_DATA_ATTR uint8_t seq_number = 0;
 
 // BLE
 #define BLE_DEVICE_NAME "AECBC"        // デバイス名(サービス名)
-#define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 65535
+#define BLE_DEVICE_NUMBER 100            // デバイス識別番号 0 - 65535
 const int advertising_msec = 350;  // アドバタイジング時間[msec]
 BLEServer *pBLEServer;
 BLEAdvertising *pBLEAdvertising;
@@ -52,15 +52,15 @@ BLEAdvertising *pBLEAdvertising;
 
 // 加速度センサADXL345
 #include <Wire.h>
-#define ADXL345_ADDRESS (0x53)  // 0x53(pin SD0 to L) or 0x1d(pin SD0 to H)
-#define HISTORY_SIZE 4
+#define ADXL345_ADDRESS (0x1d)  // 0x53(pin SD0 to L) or 0x1d(pin SD0 to H)
+#define HISTORY_SIZE 3
 uint8_t regTbl[6];
-RTC_DATA_ATTR float xx[HISTORY_SIZE]; // [m/s2]  // X軸の履歴
-RTC_DATA_ATTR float yy[HISTORY_SIZE]; // [m/s2]  // Y軸の履歴
-RTC_DATA_ATTR float zz[HISTORY_SIZE]; // [m/s2]  // Z軸の履歴
-const float x_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
-const float y_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
-const float z_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
+RTC_DATA_ATTR float x_m_s2_array[HISTORY_SIZE]; // [m/s2]  // X軸の履歴
+RTC_DATA_ATTR float y_m_s2_array[HISTORY_SIZE]; // [m/s2]  // Y軸の履歴
+RTC_DATA_ATTR float z_m_s2_array[HISTORY_SIZE]; // [m/s2]  // Z軸の履歴
+const float x_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
+const float y_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
+const float z_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
 
 
 void setup() {
@@ -70,6 +70,11 @@ void setup() {
   #ifdef DEBUG
     Serial.begin(115200);
     delay(500);
+    Serial.println();
+    Serial.print("BLE_DEVICE_NAME=");
+    Serial.println(BLE_DEVICE_NAME);
+    Serial.print("BLE_DEVICE_NUMBER=");
+    Serial.println(BLE_DEVICE_NUMBER);
   #endif
 
   // シーケンス番号をインクリメント
@@ -95,9 +100,11 @@ void setup() {
   pin_in_2 = digitalRead(PIN_IN_2);
   pin_in_3 = digitalRead(PIN_IN_3);
   #ifdef DEBUG
-    Serial.print("PIN_IN(1,2,3):(");
+    Serial.print("   PIN_IN(1,2,3):(");
     Serial.print(pin_in_1);
+    Serial.print(",");
     Serial.print(pin_in_2);
+    Serial.print(",");
     Serial.print(pin_in_3);
     Serial.println(")");
   #endif
@@ -118,82 +125,93 @@ void setup() {
   // addr : 0x2d
   // data : 0x08(measure mode = do not sleep)
   writeI2c(ADXL345_ADDRESS, 0x2d, 0x08);
-  
+
   // XYZ値の先頭アドレスから6byteのレジスタデータを要求、取得
   readI2c(ADXL345_ADDRESS, 0x32, 6, regTbl);
-  
+
   // データを各XYZの値に変換する(LSB単位)
   // 13bit値 で +/-16[g] を表現するため、値1あたり、32/(2^13)=0.00390625[g]
   // 1[g] = 9.80665[m/s2]より、値1あたり、0.00390625*9.80665=0.03830723[m/s2]
-  int16_t x = (((int16_t)regTbl[1]) << 8) | regTbl[0];
-  int16_t y = (((int16_t)regTbl[3]) << 8) | regTbl[2];
-  int16_t z = (((int16_t)regTbl[5]) << 8) | regTbl[4];  
-  float x_ = x * 0.03830723;
-  float y_ = y * 0.03830723;
-  float z_ = z * 0.03830723;
+  int16_t x;  // ADXL345から読んだ値
+  int16_t y;
+  int16_t z;
+  float x_g;  // [G] に換算
+  float y_g;
+  float z_g;
+  float x_m_s2;  // [m/s^2]に換算
+  float y_m_s2;
+  float z_m_s2;
+  x = (((int16_t)regTbl[1]) << 8) | regTbl[0];
+  y = (((int16_t)regTbl[3]) << 8) | regTbl[2];
+  z = (((int16_t)regTbl[5]) << 8) | regTbl[4];
+  x_g = x * 0.00390625;
+  y_g = y * 0.00390625;
+  z_g = z * 0.00390625;
+  x_m_s2 = x_g * 9.80665;
+  y_m_s2 = y_g * 9.80665;
+  z_m_s2 = z_g * 9.80665;
 
   // 加速度バッファを更新
   for (int i = 1; i < HISTORY_SIZE; i ++) {
-    xx[i-1] = xx[i];
-    yy[i-1] = yy[i];
-    zz[i-1] = zz[i];
+    x_m_s2_array[i - 1] = x_m_s2_array[i];
+    y_m_s2_array[i - 1] = y_m_s2_array[i];
+    z_m_s2_array[i - 1] = z_m_s2_array[i];
   }
-  xx[HISTORY_SIZE - 1] = x_;
-  yy[HISTORY_SIZE - 1] = y_;
-  zz[HISTORY_SIZE - 1] = z_;
-  
+  x_m_s2_array[HISTORY_SIZE - 1] = x_m_s2;
+  y_m_s2_array[HISTORY_SIZE - 1] = y_m_s2;
+  z_m_s2_array[HISTORY_SIZE - 1] = z_m_s2;
+
+  // 各XYZ軸の加速度([raw][G][m/s^2])を出力する
+  #ifdef DEBUG
+    Serial.print("   X:");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(x_g);
+    Serial.print("[G],");
+    Serial.print(x_m_s2);
+    Serial.print("[m/s2]");
+    Serial.print(" / Y:");
+    Serial.print(y);
+    Serial.print(",");
+    Serial.print(y_g);
+    Serial.print("[G],");
+    Serial.print(y_m_s2);
+    Serial.print("[m/s2]");
+    Serial.print(" / Z:");
+    Serial.print(z);
+    Serial.print(",");
+    Serial.print(z_g);
+    Serial.print("[G],");
+    Serial.print(z_m_s2);
+    Serial.print("[m/s2]");
+    Serial.println();
+  #endif
+
   // 過去の加速度値と比較し、動いているか判断
   bool is_x_moving = false;
   bool is_y_moving = false;
   bool is_z_moving = false;
   for (int i = 1; i < HISTORY_SIZE; i ++) {
-    if (abs(xx[i-1] - xx[i]) > x_max) {
+    if (abs(x_m_s2_array[i-1] - x_m_s2_array[i]) > x_m_s2_max) {
       is_x_moving = true;
     }
-    if (abs(yy[i-1] - yy[i]) > y_max) {
+    if (abs(y_m_s2_array[i-1] - y_m_s2_array[i]) > y_m_s2_max) {
       is_y_moving = true;
     }
-    if (abs(zz[i-1] - zz[i]) > z_max) {
+    if (abs(z_m_s2_array[i-1] - z_m_s2_array[i]) > z_m_s2_max) {
       is_z_moving = true;
     }
   }
   
-  // 各XYZ軸の加速度(m/s^2)を出力する
+  // 各軸が動いているかを出力する
   #ifdef DEBUG
-    Serial.print("X : ");
-    Serial.print(x);
-    Serial.print(" ");
-    Serial.print(x * 0.00390625);
-    Serial.print("[G] ");
-    Serial.print(x_);
-    Serial.print("[m/s2]");
-    if (is_x_moving) {
-      Serial.print("  moving");
-    }
-    Serial.println();
-    
-    Serial.print("Y : ");
-    Serial.print(y);
-    Serial.print(" ");
-    Serial.print(y * 0.00390625);
-    Serial.print("[G] ");
-    Serial.print(y_);
-    Serial.print("[m/s2]");
-    if (is_z_moving) {
-      Serial.print("  moving");
-    }
-    Serial.println();
-
-    Serial.print("Z : ");
-    Serial.print(z);
-    Serial.print(" ");
-    Serial.print(z * 0.00390625);
-    Serial.print("[G] ");
-    Serial.print(z_);
-    Serial.print("[m/s2]");
-    if (is_z_moving) {
-      Serial.print("  moving");
-    }
+    Serial.print("   moving (x, y, z) = (");
+    Serial.print(is_x_moving);
+    Serial.print(",");
+    Serial.print(is_y_moving);
+    Serial.print(",");
+    Serial.print(is_z_moving);
+    Serial.print(")");
     Serial.println();
   #endif
 
@@ -217,15 +235,15 @@ void setup() {
   #ifdef DEBUG
     Serial.print("Advertising ");
     Serial.print(advertising_msec);
-    Serial.print("[ms] ");
+    Serial.print("[ms]  count=");
+    Serial.print((int)seq_number);
   #endif
   // アドバタイズ時間だけ待つ
   delay(advertising_msec);
   // アドバタイズ停止
   pBLEAdvertising->stop();
   #ifdef DEBUG
-    Serial.print(" ... stoped! ");
-    Serial.println((int)seq_number);
+    Serial.println(" ... stoped! ");
   #endif
 
   //////////////////////////////////////////////////////////////////////////
@@ -233,9 +251,10 @@ void setup() {
   //////////////////////////////////////////////////////////////////////////
 
   #ifdef DEBUG
-    Serial.print("Waiting ");
+    Serial.print("Loop Waiting ");
     Serial.print(MS_TO_SLEEP);
     Serial.println("[ms]");
+    Serial.println();
   #endif
   esp_sleep_enable_timer_wakeup(MS_TO_SLEEP * 1000);
   esp_deep_sleep_start();

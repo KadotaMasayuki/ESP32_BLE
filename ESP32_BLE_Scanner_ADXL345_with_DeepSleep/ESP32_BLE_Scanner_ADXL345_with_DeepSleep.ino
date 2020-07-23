@@ -36,14 +36,15 @@
 #define PIN_OUT_3 27
 
 
-// ディープスリープ時間
-#define MS_TO_SLEEP 400
+// スリープ時間
+#define MS_TO_SLEEP 150
 
 
 /* BLE  */
 #define BLE_DEVICE_NAME "AECBC"        // デバイス名(サービス名)
-#define BLE_DEVICE_NUMBER 1            // デバイス識別番号 0 - 65535
+#define BLE_DEVICE_NUMBER 101            // デバイス識別番号 0 - 65535
 const int scanning_sec = 1;   // スキャン時間[sec]
+const int rescanCount = 3;  // みつからないときの再試行回数
 BLEScan *pScan;
 
 
@@ -54,6 +55,11 @@ void setup() {
   #ifdef DEBUG
     Serial.begin(115200);
     delay(500);
+    Serial.println();
+    Serial.print("BLE_DEVICE_NAME=");
+    Serial.println(BLE_DEVICE_NAME);
+    Serial.print("BLE_DEVICE_NUMBER=");
+    Serial.println(BLE_DEVICE_NUMBER);
   #endif
 
   //////////////////////////////////////////////////////////////////////////
@@ -76,9 +82,11 @@ void setup() {
   pin_in_2 = digitalRead(PIN_IN_2);
   pin_in_3 = digitalRead(PIN_IN_3);
   #ifdef DEBUG
-    Serial.print("PIN_IN(1,2,3):(");
+    Serial.print("   PIN_IN(1,2,3):(");
     Serial.print(pin_in_1);
+    Serial.print(",");
     Serial.print(pin_in_2);
+    Serial.print(",");
     Serial.print(pin_in_3);
     Serial.println(")");
   #endif
@@ -101,7 +109,9 @@ void setup() {
 
   // スキャン開始
   #ifdef DEBUG
-    Serial.println("Scanning!");
+    Serial.print("Scanning ");
+    Serial.print(scanning_sec);
+    Serial.println("[sec]");
   #endif
   BLEScanResults foundDevices = pScan->start(scanning_sec);
   int foundCount = foundDevices.getCount();
@@ -149,15 +159,17 @@ void setup() {
 
           Serial.print("   INFO(1,2,3):(");
           Serial.print(pin_info_1);
+          Serial.print(",");
           Serial.print(pin_info_2);
+          Serial.print(",");
           Serial.print(pin_info_3);
           Serial.println(")");
 
-          Serial.print("X : ");
+          Serial.print("   X:");
           Serial.print(x);
-          Serial.print(" ");
+          Serial.print(",");
           Serial.print(x * 0.00390625);
-          Serial.print("[G] ");
+          Serial.print("[G],");
           Serial.print(x * 0.03830723);
           Serial.print("[m/s2]");
           if (is_x_moving) {
@@ -165,11 +177,11 @@ void setup() {
           }
           Serial.println();
           
-          Serial.print("Y : ");
+          Serial.print("   Y:");
           Serial.print(y);
-          Serial.print(" ");
+          Serial.print(",");
           Serial.print(y * 0.00390625);
-          Serial.print("[G] ");
+          Serial.print("[G],");
           Serial.print(y * 0.03830723);
           Serial.print("[m/s2]");
           if (is_z_moving) {
@@ -177,11 +189,11 @@ void setup() {
           }
           Serial.println();
       
-          Serial.print("Z : ");
+          Serial.print("   Z:");
           Serial.print(z);
-          Serial.print(" ");
+          Serial.print(",");
           Serial.print(z * 0.00390625);
-          Serial.print("[G] ");
+          Serial.print("[G],");
           Serial.print(z * 0.03830723);
           Serial.print("[m/s2]");
           if (is_z_moving) {
@@ -193,7 +205,7 @@ void setup() {
           Serial.print(rssi);
           Serial.println("[dBm]");
 
-          Serial.print("RAW:");
+          Serial.print("   RAW:");
           for (int i = 0; i < data.length(); i ++) {
             Serial.print((char)data[i], HEX);
             Serial.print(" ");
@@ -201,7 +213,7 @@ void setup() {
           Serial.println();
         #endif
         
-        // ピン出力  スキャン結果のうち、PIN情報を出力する
+        // ピン出力  スキャン結果のうち、ピン情報を出力ピンに出力する
         if (pin_info_1 == 0) {
           digitalWrite(PIN_OUT_1, LOW);
         } else {
@@ -226,7 +238,7 @@ void setup() {
   //////////////////////////////////////////////////////////////////////////
 
   #ifdef DEBUG
-    Serial.print("Waiting ");
+    Serial.print("Loop Waiting ");
     Serial.print(MS_TO_SLEEP);
     Serial.println("[ms]");
   #endif
