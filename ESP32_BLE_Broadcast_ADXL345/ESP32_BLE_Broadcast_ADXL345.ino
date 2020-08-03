@@ -1,4 +1,4 @@
-// 2020/06/30,2020/07/22
+// 2020/06/30,07/22,08/03
 //  BLEのアドバタイズで3軸加速度センサ(ADXL345)の値を飛ばす
 //
 // 参考
@@ -49,6 +49,9 @@ const int advertising_msec = 350;  // アドバタイジング時間[msec]
 BLEServer *pBLEServer;
 BLEAdvertising *pBLEAdvertising;
 
+// BLE機能タイプ
+#define FUNCTION_LENGTH_ACC 9   // 追加の機能タイプ(加速度)のデータ長(「データ長」と「機能タイプ識別子」含む)
+#define FUNCTION_TYPE_ACC 1     // 追加の機能タイプ(加速度)識別子
 
 // 加速度センサADXL345
 #include <Wire.h>
@@ -66,20 +69,12 @@ const float z_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
 void setup() {
   // put your setup code here, to run once:
 
-  // シリアルモニタの初期化
-  #ifdef DEBUG
-    Serial.begin(115200);
-    delay(500);
-    Serial.println();
-    Serial.print("BLE_DEVICE_NAME=");
-    Serial.println(BLE_DEVICE_NAME);
-    Serial.print("BLE_DEVICE_NUMBER=");
-    Serial.println(BLE_DEVICE_NUMBER);
-  #endif
+  //////////////////////////////////////////////////////////////////////////
+  // 変数設定
+  //////////////////////////////////////////////////////////////////////////
 
   // シーケンス番号を初期化
   seq_number = 0;
-
 
   //////////////////////////////////////////////////////////////////////////
   // GPIO
@@ -93,7 +88,21 @@ void setup() {
   pinMode(PIN_OUT_2, OUTPUT);
   pinMode(PIN_OUT_3, OUTPUT);
 
+  //////////////////////////////////////////////////////////////////////////
+  // シリアルモニタ
+  //////////////////////////////////////////////////////////////////////////
   
+  // シリアルモニタの初期化
+  #ifdef DEBUG
+    Serial.begin(115200);
+    delay(500);
+    Serial.println();
+    Serial.print("BLE_DEVICE_NAME=");
+    Serial.println(BLE_DEVICE_NAME);
+    Serial.print("BLE_DEVICE_NUMBER=");
+    Serial.println(BLE_DEVICE_NUMBER);
+  #endif
+
   //////////////////////////////////////////////////////////////////////////
   // I2C
   //////////////////////////////////////////////////////////////////////////
@@ -110,7 +119,6 @@ void setup() {
   // addr : 0x2d
   // data : 0x08(measure mode = do not sleep)
   writeI2c(ADXL345_ADDRESS, 0x2d, 0x08);
-
 
   //////////////////////////////////////////////////////////////////////////
   // BLE
@@ -379,26 +387,26 @@ void readI2c(byte device_addr, byte register_addr, int len, byte buffer[]) {
 
 
 void setAdvertisingData(BLEAdvertising* pBLEAdvertising, int pin_in_1, int pin_in_2, int pin_in_3, int16_t x, bool is_x_moving, int16_t y, bool is_y_moving, int16_t z, bool is_z_moving) {
-  unsigned long num = (unsigned long)BLE_DEVICE_NUMBER;
-  
+  // Manufacturer Data のみで運用する。
+  // Advertiseデータの長さは規格上31バイト。本プログラムでこの全てを使うが、このうち、下記strDataに使えるのは29バイト。
   std::string strData = "";
-  strData += (char)0xff;                            // manufacturer ID low byte
-  strData += (char)0xff;                            // manufacturer ID high byte
-  strData += (char)((uint16_t)num & 0xff);           // サーバー識別番号 最下位バイト
-  strData += (char)((((uint16_t)num) >> 8) & 0xff);  // サーバー識別番号 最上位バイト
+  strData += (char)0xff;                            // manufacturer ID low byte (屋内用途であれば、未認証でも0xffffを使える)
+  strData += (char)0xff;                            // manufacturer ID high byte (屋内用途であれば、未認証でも0xffffを使える)
+  strData += (char)(((uint16_t)BLE_DEVICE_NUMBER) & 0xff);         // デバイス識別番号 最下位バイト
+  strData += (char)((((uint16_t)BLE_DEVICE_NUMBER) >> 8) & 0xff);  // デバイス識別番号 最上位バイト
   strData += (char)seq_number;                      // シーケンス番号
-  strData += (char)pin_in_1;
-  strData += (char)pin_in_2;
-  strData += (char)pin_in_3;
+  strData += (char)(pin_in_1 << 2) | (pin_in_2 << 1) | pin_in_3;  // ピン入力情報
+  // ここまでが基本情報。
+  // ここから追加情報
+  strData += (char)FUNCTION_LENGTH_ACC;     // 加速度情報の長さ
+  strData += (char)FUNCTION_TYPE_ACC;       // 加速度情報識別子
   strData += (char)(x & 0xff);            // 加速度Xの下位ビット
   strData += (char)((x >> 8) & 0xff);
-  strData += (char)is_x_moving;           // 加速度Xによる、「動作中」判定
   strData += (char)(y & 0xff);            // 加速度Yの下位ビット
   strData += (char)((y >> 8) & 0xff);
-  strData += (char)is_y_moving;           // 加速度Yによる、「動作中」判定
   strData += (char)(z & 0xff);            // 加速度Zの下位ビット
   strData += (char)((z >> 8) & 0xff);
-  strData += (char)is_z_moving;           // 加速度Zによる、「動作中」判定
+  strData += (char)(is_x_moving << 2) | (is_y_moving << 1) | is_z_moving;    // 加速度X,Y,Zによる、「動作中」判定
 
   // デバイス名とフラグをセットし、送信情報を組み込んでアドバタイズオブジェクトに設定する
   BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
