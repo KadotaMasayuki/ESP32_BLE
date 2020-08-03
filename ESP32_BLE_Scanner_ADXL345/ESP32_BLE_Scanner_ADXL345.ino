@@ -1,4 +1,4 @@
-// 2020/07/15,2020/07/22
+// 2020/07/15,22,08/03
 //  BLEのアドバタイズデータを見ていろいろ判断する
 //  3軸加速度センサ(ADXL345)の値を判断する
 //
@@ -44,20 +44,26 @@
 const int scanning_sec = 1;   // スキャン時間[sec]
 BLEScan *pScan;
 
+// BLE機能タイプ
+#define FUNCTION_TYPE_ACC 1     // 追加の機能タイプ(加速度)
+#define FUNCTION_LENGTH_ACC 7   // 追加の機能タイプ(加速度)のデータ長
+
+// 呼出し
+#define PIN_CALL 33  // 呼出し機能出力ピン。呼び出すときL
+#define MS_TO_NEXT_CALL 300 * 1000  // 呼出し後に再度呼出しできるまでの無視期間
+uint32_t call_interval_count = 0;  // 無視期間のカウント
+#define RSSI_LIMIT -50  // 間違いなくすぐ近くに居ると思われる値。この値より大きいと近く、小さいと遠い。
+
 
 void setup() {
   // put your setup code here, to run once:
 
-  // シリアルモニタの初期化
-  #ifdef DEBUG
-    Serial.begin(115200);
-    delay(500);
-    Serial.println();
-    Serial.print("BLE_DEVICE_NAME=");
-    Serial.println(BLE_DEVICE_NAME);
-    Serial.print("BLE_DEVICE_NUMBER=");
-    Serial.println(BLE_DEVICE_NUMBER);
-  #endif
+  //////////////////////////////////////////////////////////////////////////
+  // 変数設定
+  //////////////////////////////////////////////////////////////////////////
+
+  // 無視期間のカウントを、無視期間終了値に設定
+  call_interval_count = MS_TO_NEXT_CALL;
 
   //////////////////////////////////////////////////////////////////////////
   // GPIO
@@ -70,6 +76,22 @@ void setup() {
   pinMode(PIN_OUT_1, OUTPUT);
   pinMode(PIN_OUT_2, OUTPUT);
   pinMode(PIN_OUT_3, OUTPUT);
+  pinMode(PIN_CALL, OUTPUT); digitalWrite(PIN_CALL, LOW);
+
+  //////////////////////////////////////////////////////////////////////////
+  // シリアルモニタ
+  //////////////////////////////////////////////////////////////////////////
+
+  // シリアルモニタの初期化
+  #ifdef DEBUG
+    Serial.begin(115200);
+    delay(500);
+    Serial.println();
+    Serial.print("BLE_DEVICE_NAME=");
+    Serial.println(BLE_DEVICE_NAME);
+    Serial.print("BLE_DEVICE_NUMBER=");
+    Serial.println(BLE_DEVICE_NUMBER);
+  #endif
 
   //////////////////////////////////////////////////////////////////////////
   // BLE
@@ -84,10 +106,10 @@ void setup() {
   // パッシブスキャンにする(アクティブスキャンは、デバイスを見つけたらデータを取りに行く)
   pScan->setActiveScan(false);
 
-  
 }
 
 void loop() {
+  bool to_call = false;  // 呼出するならtrue
   
   // スキャン開始
   #ifdef DEBUG
@@ -118,118 +140,146 @@ void loop() {
     if (device_name == BLE_DEVICE_NAME) {
       if (dev.haveManufacturerData()) {
         std::string data = dev.getManufacturerData();
-        manu_code = data[1] << 8 | data[0];  // manufacturer ID
-        device_number = (((uint16_t)data[3]) << 8) | (uint16_t)data[2];  // 識別番号
-        seq_number = data[4];  // シーケンス番号
-        pin_info_1 = data[5];
-        pin_info_2 = data[6];
-        pin_info_3 = data[7];
-        x = (((int16_t)data[9]) << 8) | data[8];
-        is_x_moving = data[10];
-        y = (((int16_t)data[12]) << 8) | data[11];
-        is_y_moving = data[13];
-        z = (((int16_t)data[15]) << 8) | data[14];
-        is_z_moving = data[16];
-        rssi = dev.getRSSI();
+        if (data.length() >= 7) {
+          int func_len = (int)data[6];
+          if (data.length() >= 6 + func_len) {
+            if (data[7] == FUNCTION_TYPE_ACC) {
+              manu_code = data[1] << 8 | data[0];  // manufacturer ID
+              device_number = (((uint16_t)data[3]) << 8) | (uint16_t)data[2];  // 識別番号
+              seq_number = data[4];  // シーケンス番号
+              pin_info_1 = (data[5] & 0x04) >> 2;
+              pin_info_2 = (data[5] & 0x02) >> 1;
+              pin_info_3 = data[5] & 0x01;
+              x = (((int16_t)data[9]) << 8) | data[8];
+              y = (((int16_t)data[11]) << 8) | data[10];
+              z = (((int16_t)data[13]) << 8) | data[12];
+              is_x_moving = (data[14] & 0x04) >> 2;
+              is_y_moving = (data[14] & 0x02) >> 1;
+              is_z_moving = data[14] & 0x01;
+              rssi = dev.getRSSI();
+              
+              // 呼出するか
+              if (is_x_moving || is_y_moving || is_z_moving) {
+                to_call = false;
+              } else if (rssi > RSSI_LIMIT) {
+                to_call = true;  // 動いていなくて十分近い
+              } else {
+                to_call = false;
+              }
 
-        #ifdef DEBUG
-          Serial.print("Device Number:");
-          Serial.print(device_number);
-
-          Serial.print("   SN:");
-          Serial.print(seq_number);
-
-          Serial.print("   INFO(1,2,3):(");
-          Serial.print(pin_info_1);
-          Serial.print(",");
-          Serial.print(pin_info_2);
-          Serial.print(",");
-          Serial.print(pin_info_3);
-          Serial.println(")");
-
-          Serial.print("   X:");
-          if (is_x_moving) {
-            Serial.print(" moving     : ");
-          } else {
-            Serial.print(" not moving : ");
-          }
-          Serial.print(x);
-          Serial.print(",");
-          Serial.print(x * 0.00390625);
-          Serial.print("[G],");
-          Serial.print(x * 0.03830723);
-          Serial.print("[m/s2]");
-          Serial.println();
-          
-          Serial.print("   Y:");
-          if (is_y_moving) {
-            Serial.print(" moving     : ");
-          } else {
-            Serial.print(" not moving : ");
-          }
-          Serial.print(y);
-          Serial.print(",");
-          Serial.print(y * 0.00390625);
-          Serial.print("[G],");
-          Serial.print(y * 0.03830723);
-          Serial.print("[m/s2]");
-          Serial.println();
+              #ifdef DEBUG
+                Serial.print("Device Number:");
+                Serial.print(device_number);
       
-          Serial.print("   Z:");
-          if (is_z_moving) {
-            Serial.print(" moving     : ");
-          } else {
-            Serial.print(" not moving : ");
-          }
-          Serial.print(z);
-          Serial.print(",");
-          Serial.print(z * 0.00390625);
-          Serial.print("[G],");
-          Serial.print(z * 0.03830723);
-          Serial.print("[m/s2]");
-          Serial.println();
-        
-          Serial.print("   RSSI:");
-          Serial.print(rssi);
-          Serial.println("[dBm]");
+                Serial.print("   SN:");
+                Serial.print(seq_number);
+      
+                Serial.print("   INFO(1,2,3):(");
+                Serial.print(pin_info_1);
+                Serial.print(",");
+                Serial.print(pin_info_2);
+                Serial.print(",");
+                Serial.print(pin_info_3);
+                Serial.println(")");
+      
+                Serial.print("   X:");
+                if (is_x_moving) {
+                  Serial.print(" moving     : ");
+                } else {
+                  Serial.print(" not moving : ");
+                }
+                Serial.print(x);
+                Serial.print(",");
+                Serial.print(x * 0.00390625);
+                Serial.print("[G],");
+                Serial.print(x * 0.03830723);
+                Serial.print("[m/s2]");
+                Serial.println();
+                
+                Serial.print("   Y:");
+                if (is_y_moving) {
+                  Serial.print(" moving     : ");
+                } else {
+                  Serial.print(" not moving : ");
+                }
+                Serial.print(y);
+                Serial.print(",");
+                Serial.print(y * 0.00390625);
+                Serial.print("[G],");
+                Serial.print(y * 0.03830723);
+                Serial.print("[m/s2]");
+                Serial.println();
+            
+                Serial.print("   Z:");
+                if (is_z_moving) {
+                  Serial.print(" moving     : ");
+                } else {
+                  Serial.print(" not moving : ");
+                }
+                Serial.print(z);
+                Serial.print(",");
+                Serial.print(z * 0.00390625);
+                Serial.print("[G],");
+                Serial.print(z * 0.03830723);
+                Serial.print("[m/s2]");
+                Serial.println();
+              
+                Serial.print("   RSSI:");
+                Serial.print(rssi);
+                Serial.println("[dBm]");
 
-          Serial.print("   RAW:");
-          for (int i = 0; i < data.length(); i ++) {
-            Serial.print((char)data[i], HEX);
-            Serial.print(" ");
-          }
-          Serial.println();
-        #endif
-        
-        // ピン出力  スキャン結果のうち、ピン情報を出力ピンに出力する
-        if (pin_info_1 == 0) {
-          digitalWrite(PIN_OUT_1, LOW);
-        } else {
-          digitalWrite(PIN_OUT_1, HIGH);
-        }
-        if (pin_info_2 == 0) {
-          digitalWrite(PIN_OUT_2, LOW);
-        } else {
-          digitalWrite(PIN_OUT_2, HIGH);
-        }
-        if (pin_info_3 == 0) {
-          digitalWrite(PIN_OUT_3, LOW);
-        } else {
-          digitalWrite(PIN_OUT_3, HIGH);
-        }
+                Serial.print("   RAW:");
+                for (int i = 0; i < data.length(); i ++) {
+                  Serial.print((char)data[i], HEX);
+                  Serial.print(" ");
+                }
+                Serial.println();
 
-        break;
+                Serial.print("CALL INTERVAL : ");
+                Serial.println(call_interval_count);
+
+                Serial.print("TO CALL : ");
+                if (to_call) {
+                  Serial.print("ON");
+                  if (call_interval_count < MS_TO_NEXT_CALL) {
+                    Serial.print(" but now interval");
+                  }
+                } else {
+                  Serial.print("OFF");
+                }
+                Serial.println();
+              #endif
+            }
+          }
+        }
       }
     }
   }
 
-  // ピン入力
+  // 自身のピン入力
   int pin_in_1;
   int pin_in_2;
   int pin_in_3;
   pin_in_1 = digitalRead(PIN_IN_1);
   pin_in_2 = digitalRead(PIN_IN_2);
   pin_in_3 = digitalRead(PIN_IN_3);
+  // ピン出力
+  //    ピン入力の結果を出力ピンにそのまま出力する
+  if (pin_in_1 == 0) {
+    digitalWrite(PIN_OUT_1, LOW);
+  } else {
+    digitalWrite(PIN_OUT_1, HIGH);
+  }
+  if (pin_in_2 == 0) {
+    digitalWrite(PIN_OUT_2, LOW);
+  } else {
+    digitalWrite(PIN_OUT_2, HIGH);
+  }
+  if (pin_in_3 == 0) {
+    digitalWrite(PIN_OUT_3, LOW);
+  } else {
+    digitalWrite(PIN_OUT_3, HIGH);
+  }
   #ifdef DEBUG
     Serial.print("   PIN_IN(1,2,3):(");
     Serial.print(pin_in_1);
@@ -237,9 +287,19 @@ void loop() {
     Serial.print(pin_in_3);
     Serial.println(")");
   #endif
+
+  //////////////////////////////////////////////////////////////////////////
+  // 呼び出し
+  //////////////////////////////////////////////////////////////////////////
   
-  // ピン出力は、BLEのスキャン結果により出力する
-  ;
+  if (call_interval_count < MS_TO_NEXT_CALL) {
+    call_interval_count += MS_TO_SLEEP + (scanning_sec * 1000);
+  } else if (to_call) {
+    digitalWrite(PIN_CALL, HIGH);   // ONして
+    delay(400);                     // ちょっと待って
+    digitalWrite(PIN_CALL, LOW);    // OFFする
+    call_interval_count = 0;        // カウントをゼロにして、インターバル期間を開始する
+  }
 
   //////////////////////////////////////////////////////////////////////////
   // Wait
