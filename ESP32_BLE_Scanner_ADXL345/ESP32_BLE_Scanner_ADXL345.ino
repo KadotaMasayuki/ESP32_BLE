@@ -1,6 +1,7 @@
-// 2020/07/15,22,08/03
+// 2020/07/15,22,08/03,08
 //  BLEのアドバタイズデータを見ていろいろ判断する
 //  3軸加速度センサ(ADXL345)の値を判断する
+//  デバッグピン(呼び出し)を設定。10kオーム程度でプルアップしておき、Lになると呼び出し
 //
 // 参考
 // http://marchan.e5.valueserver.jp/cabin/comp/jbox/arc212/doc21203.html
@@ -26,7 +27,7 @@
 // OUT3 (GPIO27)
 //
 
-#define PIN_IN_1  36
+#define PIN_IN_1  36  // 呼び出しデバッグピンとして使う。10kΩプルアップし、呼び出すときはLにする。
 #define PIN_IN_2  39
 #define PIN_IN_3  34
 #define PIN_OUT_1 25
@@ -109,7 +110,9 @@ void setup() {
 }
 
 void loop() {
-  bool to_call = false;  // 呼出するならtrue
+  bool to_call = false;  // 呼び出しするならtrue
+  bool debug_to_call = false;  // 呼び出しするならtrue (デバッグピン用)
+  int debug_to_call_pin_prev = 1;  // デバッグピンの前回の状態
   
   // スキャン開始
   #ifdef DEBUG
@@ -280,19 +283,28 @@ void loop() {
   } else {
     digitalWrite(PIN_OUT_3, HIGH);
   }
+  // デバッグピンがLになったら、呼び出しフラグをONする
+  debug_to_call = false;
+  if ((pin_in_1 == 0) && (debug_to_call_pin_prev == 1)) {
+    debug_to_call = true;
+    to_call = true;
+  }
+  debug_to_call_pin_prev = pin_in_1;
+  // シリアル出力
   #ifdef DEBUG
     Serial.print("   PIN_IN(1,2,3):(");
     Serial.print(pin_in_1);
     Serial.print(pin_in_2);
     Serial.print(pin_in_3);
-    Serial.println(")");
+    Serial.print(")  DEBUG=");
+    Serial.println(debug_to_call);
   #endif
 
   //////////////////////////////////////////////////////////////////////////
   // 呼び出し
   //////////////////////////////////////////////////////////////////////////
-  
-  if (call_interval_count < MS_TO_NEXT_CALL) {
+
+  if ((!debug_to_call) && (call_interval_count < MS_TO_NEXT_CALL)) {
     call_interval_count += MS_TO_SLEEP + (scanning_sec * 1000);
   } else if (to_call) {
     digitalWrite(PIN_CALL, HIGH);   // ONして
