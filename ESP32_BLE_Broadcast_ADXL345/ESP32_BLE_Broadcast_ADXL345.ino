@@ -61,9 +61,9 @@ uint8_t regTbl[6];
 RTC_DATA_ATTR float x_m_s2_array[HISTORY_SIZE]; // [m/s2]  // X軸の履歴
 RTC_DATA_ATTR float y_m_s2_array[HISTORY_SIZE]; // [m/s2]  // Y軸の履歴
 RTC_DATA_ATTR float z_m_s2_array[HISTORY_SIZE]; // [m/s2]  // Z軸の履歴
-const float x_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
-const float y_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
-const float z_m_s2_max = 0.2; // [m/s2]  // 動いているかどうかの閾値
+const float x_m_s2_max = 0.17; // [m/s2]  // 動いているかどうかの閾値
+const float y_m_s2_max = 0.17; // [m/s2]  // 動いているかどうかの閾値
+const float z_m_s2_max = 0.17; // [m/s2]  // 動いているかどうかの閾値
 
 
 void setup() {

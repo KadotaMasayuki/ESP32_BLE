@@ -53,7 +53,7 @@ BLEScan *pScan;
 #define PIN_CALL 33  // 呼出し機能出力ピン。呼び出すときL
 #define MS_TO_NEXT_CALL 300 * 1000  // 呼出し後に再度呼出しできるまでの無視期間
 uint32_t call_interval_count = 0;  // 無視期間のカウント
-#define RSSI_LIMIT -50  // 間違いなくすぐ近くに居ると思われる値。この値より大きいと近く、小さいと遠い。
+#define RSSI_LIMIT -48  // 間違いなくすぐ近くに居ると思われる値。この値より大きいと近く、小さいと遠い。
 
 
 void setup() {
