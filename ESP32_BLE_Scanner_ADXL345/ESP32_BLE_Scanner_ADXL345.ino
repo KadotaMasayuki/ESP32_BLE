@@ -51,10 +51,10 @@ BLEScan *pScan;
 
 // 呼出し
 #define PIN_CALL 33  // 呼出し機能出力ピン。呼び出すときL
+#define PIN_CALL_ON_KEEP_MS 400  // 呼び出し機能出力ピンをONにする時間[ms]
 #define MS_TO_NEXT_CALL 300 * 1000  // 呼出し後に再度呼出しできるまでの無視期間
 uint32_t call_interval_count = 0;  // 無視期間のカウント
 #define RSSI_LIMIT -48  // 間違いなくすぐ近くに居ると思われる値。この値より大きいと近く、小さいと遠い。
-
 
 void setup() {
   // put your setup code here, to run once:
@@ -229,7 +229,9 @@ void loop() {
               
                 Serial.print("   RSSI:");
                 Serial.print(rssi);
-                Serial.println("[dBm]");
+                Serial.print("[dBm]. need over ");
+                Serial.println(RSSI_LIMIT);
+
 
                 Serial.print("   RAW:");
                 for (int i = 0; i < data.length(); i ++) {
@@ -239,7 +241,9 @@ void loop() {
                 Serial.println();
 
                 Serial.print("CALL INTERVAL : ");
-                Serial.println(call_interval_count);
+                Serial.print(call_interval_count);
+                Serial.print(" / ");
+                Serial.println(MS_TO_NEXT_CALL);
 
                 Serial.print("TO CALL : ");
                 if (to_call) {
@@ -308,7 +312,7 @@ void loop() {
     call_interval_count += MS_TO_SLEEP + (scanning_sec * 1000);
   } else if (to_call) {
     digitalWrite(PIN_CALL, HIGH);   // ONして
-    delay(400);                     // ちょっと待って
+    delay(PIN_CALL_ON_KEEP_MS);     // ちょっと待って
     digitalWrite(PIN_CALL, LOW);    // OFFする
     call_interval_count = 0;        // カウントをゼロにして、インターバル期間を開始する
   }
